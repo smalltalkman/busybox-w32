@@ -416,6 +416,9 @@ shell_builtin_read(struct builtin_read_params *params)
 		params->setvar("REPLY", buffer);
 	}
 
+#if ENABLE_PLATFORM_MINGW32
+ ret:
+#endif
 	free(buffer);
 #if !ENABLE_PLATFORM_MINGW32
 	if (read_flags & BUILTIN_READ_SILENT)

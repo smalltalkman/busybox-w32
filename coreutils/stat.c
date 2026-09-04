@@ -254,6 +254,10 @@ static void strcatc(char *str, char c)
  * from factoring out common uses of printf into
  * non-vararg functions.
  */
+#if ENABLE_PLATFORM_MINGW32
+// The Microsoft C runtime has its own printf_s(), which is not what we want.
+# define printf_s printf_S
+#endif
 static void printf_s(char *pformat, const char *msg)
 {
 	strcatc(pformat, 's');
