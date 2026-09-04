@@ -554,16 +554,17 @@ enum {	/* cp.c, mv.c, install.c depend on these values. CAREFUL when changing th
 #endif
 #define FILEUTILS_CP_OPTSTR "pdRfinlsLHarPvuTt:" IF_SELINUX("c")
 /* How many bits in FILEUTILS_CP_OPTSTR? */
-	FILEUTILS_CP_OPTBITS      = 18 - !ENABLE_SELINUX,
+	FILEUTILS_CP_OPTBITS      = (18 - !ENABLE_SELINUX),
 
-	FILEUTILS_RMDEST          = 1 << (19 - !ENABLE_SELINUX), /* cp --remove-destination */
-	/* bit 18 skipped for "cp --parents" */
+	FILEUTILS_RMDEST          = 1 << (18 - !ENABLE_SELINUX), /* cp --remove-destination */
+	/* bit 19 is used in cp for "cp --parents" */
 	FILEUTILS_REFLINK         = 1 << (20 - !ENABLE_SELINUX), /* cp --reflink=auto */
-	FILEUTILS_REFLINK_ALWAYS  = 1 << (21 - !ENABLE_SELINUX), /* cp --reflink[=always] */
+	/* bit 21 is used in cp for "cp --sparse=... */
 	/*
 	 * Hole. cp may have some bits set here,
 	 * they should not affect remove_file()/copy_file()
 	 */
+	FILEUTILS_REFLINK_ALWAYS  = 1 << 29, /* cp --reflink, --reflink=always */
 #if ENABLE_SELINUX
 	FILEUTILS_SET_SECURITY_CONTEXT = 1 << 30,
 #endif
@@ -2011,10 +2012,10 @@ void getcaps(void *caps) FAST_FUNC;
 
 #if ENABLE_SELINUX
 extern void renew_current_security_context(void) FAST_FUNC;
-extern void set_current_security_context(security_context_t sid) FAST_FUNC;
-extern context_t set_security_context_component(security_context_t cur_context,
+extern void set_current_security_context(char *sid) FAST_FUNC;
+extern context_t set_security_context_component(char *cur_context,
 						char *user, char *role, char *type, char *range) FAST_FUNC;
-extern void setfscreatecon_or_die(security_context_t scontext) FAST_FUNC;
+extern void setfscreatecon_or_die(char *scontext) FAST_FUNC;
 extern void selinux_preserve_fcontext(int fdesc) FAST_FUNC;
 #else
 #define selinux_preserve_fcontext(fdesc) ((void)0)

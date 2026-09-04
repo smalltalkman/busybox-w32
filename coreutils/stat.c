@@ -249,53 +249,84 @@ static void strcatc(char *str, char c)
 	str[len] = '\0';
 }
 
-static void printfs(char *pformat, const char *msg)
+/* printf is a vararg function, on some arches varargs
+ * require more code, increasing code size win
+ * from factoring out common uses of printf into
+ * non-vararg functions.
+ */
+static void printf_s(char *pformat, const char *msg)
 {
 	strcatc(pformat, 's');
 	printf(pformat, msg);
+}
+
+static void printf_lu(char *pformat, unsigned long v)
+{
+	strcat(pformat, "lu");
+	printf(pformat, v);
+}
+
+static void printf_llu(char *pformat, unsigned long long v)
+{
+	strcat(pformat, "llu");
+	printf(pformat, v);
+}
+
+static void printf_lx(char *pformat, unsigned long v)
+{
+	strcat(pformat, "lx");
+	printf(pformat, v);
+}
+
+static void printf_llx(char *pformat, unsigned long long v)
+{
+	strcat(pformat, "llx");
+	printf(pformat, v);
+}
+
+static void printf_time_t(char *pformat, time_t val)
+{
+#define TYPE_SIGNED(t) ((t) -1 < (t) 0)
+	if (TYPE_SIGNED(time_t)) {
+		strcat(pformat, "lld");
+		printf(pformat, (long long) val);
+	} else {
+		printf_llu(pformat, val);
+	}
 }
 
 #if ENABLE_FEATURE_STAT_FILESYSTEM
 /* print statfs info */
 static void FAST_FUNC print_statfs(char *pformat, const char m,
 		const char *const filename, const void *data
-		IF_SELINUX(, security_context_t scontext))
+		IF_SELINUX(, char *scontext))
 {
 	const struct statfs *statfsbuf = data;
 	if (m == 'n') {
-		printfs(pformat, filename);
+		printf_s(pformat, filename);
 	} else if (m == 'i') {
-		strcat(pformat, "llx");
-		printf(pformat, get_f_fsid(statfsbuf));
+		printf_llx(pformat, get_f_fsid(statfsbuf));
 	} else if (m == 'l') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statfsbuf->f_namelen);
+		printf_lu(pformat, statfsbuf->f_namelen);
 	} else if (m == 't') {
-		strcat(pformat, "lx");
-		printf(pformat, (unsigned long) statfsbuf->f_type); /* no equiv */
+		printf_lx(pformat, statfsbuf->f_type); /* no equiv */
 	} else if (m == 'T') {
-		printfs(pformat, human_fstype(statfsbuf->f_type));
+		printf_s(pformat, human_fstype(statfsbuf->f_type));
 	} else if (m == 'b') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statfsbuf->f_blocks);
+		printf_llu(pformat, statfsbuf->f_blocks);
 	} else if (m == 'f') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statfsbuf->f_bfree);
+		printf_llu(pformat, statfsbuf->f_bfree);
 	} else if (m == 'a') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statfsbuf->f_bavail);
+		printf_llu(pformat, statfsbuf->f_bavail);
 	} else if (m == 's' || m == 'S') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statfsbuf->f_bsize);
+		printf_lu(pformat, statfsbuf->f_bsize);
 	} else if (m == 'c') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statfsbuf->f_files);
+		printf_llu(pformat, statfsbuf->f_files);
 	} else if (m == 'd') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statfsbuf->f_ffree);
+		printf_llu(pformat, statfsbuf->f_ffree);
 # if ENABLE_SELINUX
 	} else if (m == 'C' && (option_mask32 & OPT_SELINUX)) {
-		printfs(pformat, scontext);
+		printf_s(pformat, scontext);
 # endif
 	} else {
 		strcatc(pformat, 'c');
@@ -307,15 +338,14 @@ static void FAST_FUNC print_statfs(char *pformat, const char m,
 /* print stat info */
 static void FAST_FUNC print_stat(char *pformat, const char m,
 		const char *const filename, const void *data
-		IF_SELINUX(, security_context_t scontext))
+		IF_SELINUX(, char *scontext))
 {
-#define TYPE_SIGNED(t) (! ((t) 0 < (t) -1))
 	struct stat *statbuf = (struct stat *) data;
 	struct passwd *pw_ent;
 	struct group *gw_ent;
 
 	if (m == 'n') {
-		printfs(pformat, filename);
+		printf_s(pformat, filename);
 	} else if (m == 'N') {
 		strcatc(pformat, 's');
 		if (S_ISLNK(statbuf->st_mode)) {
@@ -328,78 +358,60 @@ static void FAST_FUNC print_stat(char *pformat, const char m,
 			printf(pformat, filename);
 		}
 	} else if (m == 'd') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statbuf->st_dev);
+		printf_llu(pformat, statbuf->st_dev);
 	} else if (m == 'D') {
-		strcat(pformat, "llx");
-		printf(pformat, (unsigned long long) statbuf->st_dev);
+		printf_llx(pformat, statbuf->st_dev);
 	} else if (m == 'i') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statbuf->st_ino);
+		printf_llu(pformat, statbuf->st_ino);
 	} else if (m == 'a') {
 		strcat(pformat, "lo");
 		printf(pformat, (unsigned long) (statbuf->st_mode & (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)));
 	} else if (m == 'A') {
 		char modestr[12];
-		printfs(pformat, bb_mode_string(modestr, statbuf->st_mode));
+		printf_s(pformat, bb_mode_string(modestr, statbuf->st_mode));
 	} else if (m == 'f') {
-		strcat(pformat, "lx");
-		printf(pformat, (unsigned long) statbuf->st_mode);
+		printf_lx(pformat, statbuf->st_mode);
 	} else if (m == 'F') {
-		printfs(pformat, file_type(statbuf));
+		printf_s(pformat, file_type(statbuf));
 	} else if (m == 'h') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statbuf->st_nlink);
+		printf_lu(pformat, statbuf->st_nlink);
 	} else if (m == 'u') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statbuf->st_uid);
+		printf_lu(pformat, statbuf->st_uid);
 	} else if (m == 'U') {
 		pw_ent = getpwuid(statbuf->st_uid);
-		printfs(pformat, (pw_ent != NULL) ? pw_ent->pw_name : "UNKNOWN");
+		printf_s(pformat, (pw_ent != NULL) ? pw_ent->pw_name : "UNKNOWN");
 	} else if (m == 'g') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statbuf->st_gid);
+		printf_lu(pformat, statbuf->st_gid);
 	} else if (m == 'G') {
 		gw_ent = getgrgid(statbuf->st_gid);
-		printfs(pformat, (gw_ent != NULL) ? gw_ent->gr_name : "UNKNOWN");
+		printf_s(pformat, (gw_ent != NULL) ? gw_ent->gr_name : "UNKNOWN");
 	} else if (m == 't') {
-		strcat(pformat, "lx");
-		printf(pformat, (unsigned long) major(statbuf->st_rdev));
+		printf_lx(pformat, major(statbuf->st_rdev));
 	} else if (m == 'T') {
-		strcat(pformat, "lx");
-		printf(pformat, (unsigned long) minor(statbuf->st_rdev));
+		printf_lx(pformat, minor(statbuf->st_rdev));
 	} else if (m == 's') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statbuf->st_size);
+		printf_llu(pformat, statbuf->st_size);
 	} else if (m == 'B') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) 512); //ST_NBLOCKSIZE
+		printf_lu(pformat, 512); //ST_NBLOCKSIZE
 	} else if (m == 'b') {
-		strcat(pformat, "llu");
-		printf(pformat, (unsigned long long) statbuf->st_blocks);
+		printf_llu(pformat, statbuf->st_blocks);
 	} else if (m == 'o') {
-		strcat(pformat, "lu");
-		printf(pformat, (unsigned long) statbuf->st_blksize);
+		printf_lu(pformat, statbuf->st_blksize);
 	} else if (m == 'x') {
-		printfs(pformat, human_time(&statbuf->st_atim));
+		printf_s(pformat, human_time(&statbuf->st_atim));
 	} else if (m == 'X') {
-		strcat(pformat, TYPE_SIGNED(time_t) ? "ld" : "lu");
-		/* note: (unsigned long) would be wrong:
-		 * imagine (unsigned long64)int32 */
-		printf(pformat, (long) statbuf->st_atime);
+		printf_time_t(pformat, statbuf->st_atime);
 	} else if (m == 'y') {
-		printfs(pformat, human_time(&statbuf->st_mtim));
+		printf_s(pformat, human_time(&statbuf->st_mtim));
 	} else if (m == 'Y') {
-		strcat(pformat, TYPE_SIGNED(time_t) ? "ld" : "lu");
-		printf(pformat, (long) statbuf->st_mtime);
+		printf_time_t(pformat, statbuf->st_mtime);
 	} else if (m == 'z') {
-		printfs(pformat, human_time(&statbuf->st_ctim));
+		printf_s(pformat, human_time(&statbuf->st_ctim));
 	} else if (m == 'Z') {
-		strcat(pformat, TYPE_SIGNED(time_t) ? "ld" : "lu");
-		printf(pformat, (long) statbuf->st_ctime);
+		printf_time_t(pformat, statbuf->st_ctime);
 # if ENABLE_SELINUX
 	} else if (m == 'C' && (option_mask32 & OPT_SELINUX)) {
-		printfs(pformat, scontext);
+		printf_s(pformat, scontext);
 # endif
 	} else {
 		strcatc(pformat, 'c');
@@ -409,9 +421,9 @@ static void FAST_FUNC print_stat(char *pformat, const char m,
 
 static void print_it(const char *masterformat,
 		const char *filename,
-		void FAST_FUNC (*print_func)(char*, char, const char*, const void* IF_SELINUX(, security_context_t scontext)),
+		void FAST_FUNC (*print_func)(char*, char, const char*, const void* IF_SELINUX(, char *scontext)),
 		const void *data
-		IF_SELINUX(, security_context_t scontext))
+		IF_SELINUX(, char *scontext))
 {
 	/* Create a working copy of the format string */
 	char *format = xstrdup(masterformat);
@@ -476,7 +488,7 @@ static bool do_statfs(const char *filename, const char *format)
 	const char *format;
 #endif
 #if ENABLE_SELINUX
-	security_context_t scontext = NULL;
+	char *scontext = NULL;
 
 	if (option_mask32 & OPT_SELINUX) {
 		if ((option_mask32 & OPT_DEREFERENCE
@@ -591,7 +603,7 @@ static bool do_stat(const char *filename, const char *format)
 {
 	struct stat statbuf;
 #if ENABLE_SELINUX
-	security_context_t scontext = NULL;
+	char *scontext = NULL;
 
 	if (option_mask32 & OPT_SELINUX) {
 		if ((option_mask32 & OPT_DEREFERENCE
