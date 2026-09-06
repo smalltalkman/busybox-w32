@@ -272,7 +272,7 @@ static void printf_lu(char *pformat, unsigned long v)
 
 static void printf_llu(char *pformat, unsigned long long v)
 {
-	strcat(pformat, "llu");
+	strcat(pformat, LL_FMT"u");
 	printf(pformat, v);
 }
 
@@ -284,7 +284,7 @@ static void printf_lx(char *pformat, unsigned long v)
 
 static void printf_llx(char *pformat, unsigned long long v)
 {
-	strcat(pformat, "llx");
+	strcat(pformat, LL_FMT"x");
 	printf(pformat, v);
 }
 
@@ -292,7 +292,7 @@ static void printf_time_t(char *pformat, time_t val)
 {
 #define TYPE_SIGNED(t) ((t) -1 < (t) 0)
 	if (TYPE_SIGNED(time_t)) {
-		strcat(pformat, "lld");
+		strcat(pformat, LL_FMT"d");
 		printf(pformat, (long long) val);
 	} else {
 		printf_llu(pformat, val);
