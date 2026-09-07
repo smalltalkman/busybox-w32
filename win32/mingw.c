@@ -223,6 +223,16 @@ static int get_dev_fd(const char *filename)
 	return -1;
 }
 
+static int get_dev_fd_or_std(const char *filename)
+{
+	int fd = get_dev_type(filename);
+
+	if (fd == DEV_STDIN || fd == DEV_STDOUT || fd == DEV_STDOUT)
+		return fd;
+
+	return get_dev_fd(filename);
+}
+
 static int mingw_is_directory(const char *path);
 #undef open
 int mingw_open (const char *filename, int oflags, ...)
@@ -387,14 +397,17 @@ static inline struct timespec filetime_to_timespec(const FILETIME *ft)
 	return ts;
 }
 
-static inline mode_t file_attr_to_st_mode(DWORD attr)
+static inline mode_t file_attr_to_st_mode(int fd, DWORD attr)
 {
 	mode_t fMode = S_IRUSR|S_IRGRP|S_IROTH;
 	if (attr & FILE_ATTRIBUTE_DIRECTORY)
 		fMode |= (S_IFDIR|S_IRWXU|S_IRWXG|S_IRWXO) & ~(current_umask & 0022);
-	else if (attr & FILE_ATTRIBUTE_DEVICE)
-		fMode |= S_IFCHR|S_IWUSR|S_IWGRP|S_IWOTH;
-	else
+	else if (attr & FILE_ATTRIBUTE_DEVICE) {
+		if (GetFileType((HANDLE)_get_osfhandle(fd)) == FILE_TYPE_PIPE)
+			fMode |= S_IFIFO|S_IWUSR|S_IWGRP|S_IWOTH;
+		else
+			fMode |= S_IFCHR|S_IWUSR|S_IWGRP|S_IWOTH;
+	} else
 		fMode |= S_IFREG;
 	if (!(attr & (FILE_ATTRIBUTE_READONLY|FILE_ATTRIBUTE_DEVICE)))
 		fMode |= (S_IWUSR|S_IWGRP|S_IWOTH) & ~(current_umask & 0022);
@@ -802,8 +815,10 @@ static int do_lstat(int follow, const char *file_name, struct mingw_stat *buf)
 			buf->st_ctim = filetime_to_timespec(&(findbuf.ftCreationTime));
 		}
 		else {
+			int fd = get_dev_fd_or_std(file_name);
+
 			/* The file is not a symlink. */
-			buf->st_mode = file_attr_to_st_mode(fdata.dwFileAttributes);
+			buf->st_mode = file_attr_to_st_mode(fd, fdata.dwFileAttributes);
 			if (S_ISREG(buf->st_mode) &&
 					(has_exe_suffix(file_name) ||
 					(!(buf->st_attr & FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) &&
@@ -938,7 +953,7 @@ int FAST_FUNC mingw_fstat(int fd, struct mingw_stat *buf)
 	}
 
 	if (GetFileInformationByHandle(fh, &fdata)) {
-		buf->st_mode = file_attr_to_st_mode(fdata.dwFileAttributes);
+		buf->st_mode = file_attr_to_st_mode(-1, fdata.dwFileAttributes);
 		buf->st_attr = fdata.dwFileAttributes;
 		buf->st_size = fdata.nFileSizeLow |
 			(((off64_t)fdata.nFileSizeHigh)<<32);
