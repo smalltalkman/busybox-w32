@@ -227,7 +227,7 @@ static int get_dev_fd_or_std(const char *filename)
 {
 	int fd = get_dev_type(filename);
 
-	if (fd == DEV_STDIN || fd == DEV_STDOUT || fd == DEV_STDOUT)
+	if (fd == DEV_STDIN || fd == DEV_STDOUT || fd == DEV_STDERR)
 		return fd;
 
 	return get_dev_fd(filename);
